@@ -48,19 +48,48 @@ MaaTaskId Context::run_pipeline(const std::string& entry, const json::value& pip
 {
     LogFunc << VAR(getptr()) << VAR(entry) << VAR(pipeline_override);
 
-    PipelineTask task(entry, tasker_, getptr());
-    task.override_pipeline(pipeline_override);
-    task.run();
-    return task.task_id();
+    if (!tasker_) {
+        LogError << "tasker is null";
+        return MaaInvalidId;
+    }
+
+    PipelineTask subtask(entry, tasker_, getptr());
+    bool ov = subtask.override_pipeline(pipeline_override);
+    if (!ov) {
+        LogError << "failed to override_pipeline" << VAR(entry) << VAR(pipeline_override);
+        return MaaInvalidId;
+    }
+
+    auto& runtime_cache = tasker_->runtime_cache();
+
+    // context 的子任务没有 Pending 状态，直接就是 Running
+    runtime_cache.set_task_detail(
+        subtask.task_id(),
+        MAA_TASK_NS::TaskDetail { .task_id = subtask.task_id(), .entry = subtask.entry(), .status = MaaStatus_Running });
+
+    bool ret = subtask.run();
+
+    {
+        auto task_detail =
+            runtime_cache.get_task_detail(subtask.task_id()).value_or(MAA_TASK_NS::TaskDetail { .task_id = subtask.task_id(), .entry = entry });
+        task_detail.status = ret ? MaaStatus_Succeeded : MaaStatus_Failed;
+        runtime_cache.set_task_detail(subtask.task_id(), std::move(task_detail));
+    }
+
+    return subtask.task_id();
 }
 
 MaaRecoId Context::run_recognition(const std::string& entry, const json::value& pipeline_override, const cv::Mat& image)
 {
     LogFunc << VAR(getptr()) << VAR(entry) << VAR(pipeline_override);
 
-    RecognitionTask task(entry, tasker_, getptr());
-    task.override_pipeline(pipeline_override);
-    return task.run_with_param(image);
+    RecognitionTask subtask(entry, tasker_, getptr());
+    bool ov = subtask.override_pipeline(pipeline_override);
+    if (!ov) {
+        LogError << "failed to override_pipeline" << VAR(entry) << VAR(pipeline_override);
+        return MaaInvalidId;
+    }
+    return subtask.run_with_param(image);
 }
 
 MaaNodeId
@@ -68,10 +97,14 @@ MaaNodeId
 {
     LogFunc << VAR(getptr()) << VAR(entry) << VAR(pipeline_override) << VAR(box) << VAR(reco_detail);
 
-    ActionTask task(entry, tasker_, getptr());
-    task.override_pipeline(pipeline_override);
+    ActionTask subtask(entry, tasker_, getptr());
+    bool ov = subtask.override_pipeline(pipeline_override);
+    if (!ov) {
+        LogError << "failed to override_pipeline" << VAR(entry) << VAR(pipeline_override);
+        return MaaInvalidId;
+    }
     json::value j_detail = json::parse(reco_detail).value_or(reco_detail);
-    return task.run_with_param(box, j_detail);
+    return subtask.run_with_param(box, j_detail);
 }
 
 bool Context::override_pipeline(const json::value& pipeline_override)

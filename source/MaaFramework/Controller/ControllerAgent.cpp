@@ -24,7 +24,7 @@ ControllerAgent::~ControllerAgent()
     LogFunc;
 
     if (action_runner_) {
-        action_runner_->release();
+        action_runner_->wait_all();
     }
 }
 
@@ -148,7 +148,7 @@ MaaStatus ControllerAgent::wait(MaaCtrlId ctrl_id) const
     return action_runner_->status(ctrl_id);
 }
 
-MaaBool ControllerAgent::connected() const
+bool ControllerAgent::connected() const
 {
     return connected_;
 }
@@ -177,7 +177,7 @@ void ControllerAgent::post_stop()
     }
 }
 
-MaaBool ControllerAgent::running() const
+bool ControllerAgent::running() const
 {
     return action_runner_ && action_runner_->running();
 }

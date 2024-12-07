@@ -32,6 +32,9 @@ class Library:
         Library.toolkit_libpath = path / platform_values[platform_type][1]
         Library.toolkit = lib_import(str(Library.toolkit_libpath))
 
+        if not Library.framework or not Library.toolkit:
+            raise RuntimeError("Fail to open the library.")
+
         Library._set_api_properties()
 
     @staticmethod
